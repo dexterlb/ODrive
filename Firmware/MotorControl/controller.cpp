@@ -66,7 +66,7 @@ void Controller::start_anticogging_calibration() {
 float Controller::remove_anticogging_bias()
 {
     auto& cogmap = config_.anticogging.cogging_map;
-    
+
     auto sum = std::accumulate(std::begin(cogmap), std::end(cogmap), 0.0f);
     auto average = sum / std::size(cogmap);
 
@@ -82,7 +82,7 @@ float Controller::remove_anticogging_bias()
  * This anti-cogging implementation iterates through each encoder position,
  * waits for zero velocity & position error,
  * then samples the current required to maintain that position.
- * 
+ *
  * This holding current is added as a feedforward term in the control loop.
  */
 bool Controller::anticogging_calibration(float pos_estimate, float vel_estimate) {
@@ -144,9 +144,19 @@ void Controller::update_filter_gains() {
 }
 
 static float limitVel(const float vel_limit, const float vel_estimate, const float vel_gain, const float torque) {
+    if (vel_estimate < vel_limit) {
+        return torque;
+    }
+
+    float penalty = (vel_estimate - vel_limit) / (vel_limit * 0.2);
+    if (penalty > 1) {
+        penalty = 1;
+    }
+
     float Tmax = (vel_limit - vel_estimate) * vel_gain;
     float Tmin = (-vel_limit - vel_estimate) * vel_gain;
-    return std::clamp(torque, Tmin, Tmax);
+
+    return std::clamp(torque, Tmin, Tmax) * penalty + torque * (1 - penalty);
 }
 
 bool Controller::update() {
@@ -196,7 +206,7 @@ bool Controller::update() {
         case INPUT_MODE_PASSTHROUGH: {
             pos_setpoint_ = input_pos_;
             vel_setpoint_ = input_vel_;
-            torque_setpoint_ = input_torque_; 
+            torque_setpoint_ = input_torque_;
         } break;
         case INPUT_MODE_VEL_RAMP: {
             float max_step_size = std::abs(current_meas_period * config_.vel_ramp_rate);
@@ -259,7 +269,7 @@ bool Controller::update() {
             // Avoid updating uninitialized trajectory
             if (trajectory_done_)
                 break;
-            
+
             if (axis_->trap_traj_.t_ > axis_->trap_traj_.Tf_) {
                 // Drop into position control mode when done to avoid problems on loop counter delta overflow
                 config_.control_mode = CONTROL_MODE_POSITION_CONTROL;
@@ -284,7 +294,7 @@ bool Controller::update() {
             // Avoid updating uninitialized trajectory
             if (trajectory_done_)
                 break;
-            
+
             if (axis_->sin_accl_traj_.t_ > axis_->sin_accl_traj_.Tf_) {
                 // Drop into position control mode when done to avoid problems on loop counter delta overflow
                 config_.control_mode = CONTROL_MODE_POSITION_CONTROL;
@@ -313,7 +323,7 @@ bool Controller::update() {
             set_error(ERROR_INVALID_INPUT_MODE);
             return false;
         }
-        
+
     }
 
     // Never command a setpoint beyond its limit
@@ -449,7 +459,7 @@ bool Controller::update() {
         } else {
             vel_integrator_torque_ += ((vel_integrator_gain * gain_scheduling_multiplier) * current_meas_period) * v_err;
         }
-        // integrator limiting to prevent windup 
+        // integrator limiting to prevent windup
         vel_integrator_torque_ = std::clamp(vel_integrator_torque_, -config_.vel_integrator_limit, config_.vel_integrator_limit);
     }
 
