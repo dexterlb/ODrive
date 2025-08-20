@@ -148,7 +148,7 @@ static float limitVel(const float vel_limit, const float vel_estimate, const flo
         return torque;
     }
 
-    float penalty = (vel_estimate - vel_limit) / (vel_limit * 0.2);
+    float penalty = (std::fabs(vel_estimate) - vel_limit) / (vel_limit * 0.2);
     if (penalty > 1) {
         penalty = 1;
     }
